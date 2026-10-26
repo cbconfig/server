@@ -32,18 +32,22 @@ echo "🚀 Starting Complete VPS Bootstrap..."
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-if [ -f "$SCRIPT_DIR/config.yml" ]; then
+if [ -f "$SCRIPT_DIR/../config/index.yml" ]; then
+    CONFIG_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/config/index.yml"
+elif [ -f "$SCRIPT_DIR/config/index.yml" ]; then
+    CONFIG_FILE="$SCRIPT_DIR/config/index.yml"
+elif [ -f "$SCRIPT_DIR/config.yml" ]; then
     CONFIG_FILE="$SCRIPT_DIR/config.yml"
 elif [ -f "$SCRIPT_DIR/../config.yml" ]; then
     CONFIG_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/config.yml"
 else
-    echo "❌ ERROR: config.yml was not found!"
-    echo "Please ensure 'config.yml' exists in '$SCRIPT_DIR' or the repository root."
+    echo "❌ ERROR: config/index.yml was not found!"
+    echo "Please ensure 'config/index.yml' exists in the repository root."
     exit 1
 fi
 echo "📖 Found $(basename "$CONFIG_FILE") at '$CONFIG_FILE'. Loading configurations..."
 
-# Helper function to read simple and nested YAML key-value pairs (e.g. "nginx.ports.admin")
+# Helper function to read simple and nested YAML key-value pairs (e.g. "backup.bucket")
 get_yaml_value() {
     local key="$1"
     local default_val="${2:-}"
@@ -716,10 +720,6 @@ echo "Timezone: $TIMEZONE"
 echo "Swap: $SWAP_SIZE"
 echo "Auth: SSH Key Only (Password Disabled)"
 echo "Docker: Installed & configured for '$USER_NAME'"
-echo "--------------------------------------------------"
-echo "💡 TIP: To deploy Nginx Proxy Manager & automated Cloudflare backups,"
-echo "   run the dedicated installer:"
-echo "   sudo ./nginx/nginx.sh"
 echo "--------------------------------------------------"
 if [ -f /var/run/reboot-required ]; then
     echo "🚨 IMPORTANT: A system reboot is REQUIRED to apply security updates."

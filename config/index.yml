@@ -1,0 +1,10 @@
+# config/index.yml: System credentials and settings for VPS bootstrap
+# Update with your actual credentials before running setup.sh.
+username: "username"
+
+# SSH Public Keys: Paste a single key string, or use '|' for multiple keys (one per line)
+ssh_public_key: |
+  ssh-ed25519 AAAA... user1@example.com
+  ssh-ed25519 BBBB... user2@example.com
+
+timezone: "Asia/Kathmandu" # e.g., "UTC", "Asia/Kathmandu", etc. (Default: UTC)

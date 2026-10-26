@@ -17,12 +17,16 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/config.yml" ]; then
+if [ -f "$SCRIPT_DIR/../config/index.yml" ]; then
+    CONFIG_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/config/index.yml"
+elif [ -f "$SCRIPT_DIR/config/index.yml" ]; then
+    CONFIG_FILE="$SCRIPT_DIR/config/index.yml"
+elif [ -f "$SCRIPT_DIR/config.yml" ]; then
     CONFIG_FILE="$SCRIPT_DIR/config.yml"
 elif [ -f "$SCRIPT_DIR/../config.yml" ]; then
     CONFIG_FILE="$(cd "$SCRIPT_DIR/.." && pwd)/config.yml"
 else
-    CONFIG_FILE="$SCRIPT_DIR/config.yml"
+    CONFIG_FILE="$SCRIPT_DIR/config/index.yml"
 fi
 
 # Helper to extract SSH keys from config.yml (supports single line or multiline block)

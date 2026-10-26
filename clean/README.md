@@ -88,7 +88,6 @@ When running `sudo ./setup/setup.sh`, it automatically checks for and executes `
 | **Stock Fresh Debian VPS** *(from Cloud Provider)* | **~180MB – 260MB** | Systemd, `exim4` (MTA), `rpcbind`, `avahi-daemon`, `multipathd`, journal logs, and package caches. |
 | **After Running `clean/clean.sh`** | **~60MB – 95MB** | Bare-metal Linux kernel, `sshd`, and core `systemd` only. |
 | **After `setup.sh` + Docker** *(Idle)* | **~140MB – 190MB** | Core Debian OS + Docker CE daemon + `containerd` + Fail2ban + UFW firewall. |
-| **With Nginx Proxy Manager** (`nginx.sh`) | **~260MB – 340MB** | Full stack + NodeJS runtime inside NPM + SQLite engine + Nginx reverse proxy. |
 
 ---
 
