@@ -311,26 +311,44 @@ for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do
     apt-get remove -y $pkg || true
 done
 
-# Check operating system (Debian required)
-if [ ! -f /etc/debian_version ] || grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
-    echo "❌ ERROR: This script is exclusively built for Debian Linux."
-    echo "Detected non-Debian distribution. Aborting."
-    exit 1
+# Check operating system (Debian or Ubuntu required)
+OS_ID=""
+OS_CODENAME=""
+
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS_ID=$(echo "$ID" | tr '[:upper:]' '[:lower:]')
+    OS_CODENAME="$VERSION_CODENAME"
 fi
 
-DEBIAN_CODENAME=$(. /etc/os-release && echo "$VERSION_CODENAME")
-if [ -z "$DEBIAN_CODENAME" ]; then
-    DEBIAN_CODENAME="bookworm"
+if [ "$OS_ID" != "debian" ] && [ "$OS_ID" != "ubuntu" ]; then
+    if [ -f /etc/debian_version ]; then
+        OS_ID="debian"
+    else
+        echo "❌ ERROR: This script supports Debian and Ubuntu Linux."
+        echo "Detected unsupported distribution: '$OS_ID'. Aborting."
+        exit 1
+    fi
 fi
 
-# Setup official Docker APT repository for Debian
+if [ -z "$OS_CODENAME" ]; then
+    if [ "$OS_ID" = "ubuntu" ]; then
+        OS_CODENAME="noble"
+    else
+        OS_CODENAME="bookworm"
+    fi
+fi
+
+echo "🐧 Detected Linux distribution: $OS_ID ($OS_CODENAME)"
+
+# Setup official Docker APT repository for Debian or Ubuntu
 install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+curl -fsSL "https://download.docker.com/linux/$OS_ID/gpg" | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
 chmod a+r /etc/apt/keyrings/docker.gpg
 
 echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-  $DEBIAN_CODENAME stable" | \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS_ID \
+  $OS_CODENAME stable" | \
   tee /etc/apt/sources.list.d/docker.list > /dev/null
 
 apt-get update
@@ -432,11 +450,16 @@ if ! dpkg -l | grep -q "^ii  systemd-timesyncd "; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" systemd-timesyncd >/dev/null 2>&1 || true
 fi
 
+NTP_POOL="debian.pool.ntp.org"
+if [ "$OS_ID" = "ubuntu" ]; then
+    NTP_POOL="ubuntu.pool.ntp.org"
+fi
+
 mkdir -p /etc/systemd/timesyncd.conf.d
-cat <<'EOF' > /etc/systemd/timesyncd.conf.d/00-resilient-ntp.conf
+cat <<EOF > /etc/systemd/timesyncd.conf.d/00-resilient-ntp.conf
 [Time]
-NTP=time.cloudflare.com time.google.com 0.debian.pool.ntp.org 1.debian.pool.ntp.org
-FallbackNTP=2.debian.pool.ntp.org 3.debian.pool.ntp.org pool.ntp.org
+NTP=time.cloudflare.com time.google.com 0.$NTP_POOL 1.$NTP_POOL
+FallbackNTP=2.$NTP_POOL 3.$NTP_POOL pool.ntp.org
 PollIntervalMinSec=32
 PollIntervalMaxSec=1024
 EOF
@@ -645,18 +668,22 @@ EOF
     echo "✅ Security extras configured."
 fi
 
-# 12. Delegate System Cleanup & Automated Maintenance to clean/clean.sh
-CLEAN_SCRIPT="$SCRIPT_DIR/../clean/clean.sh"
-if [ ! -f "$CLEAN_SCRIPT" ]; then
-    CLEAN_SCRIPT="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)/clean/clean.sh"
+# 12. Delegate System Debloat & Routine Maintenance to clean/
+CLEAN_DIR="$SCRIPT_DIR/clean"
+if [ ! -d "$CLEAN_DIR" ]; then
+    CLEAN_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)/clean"
 fi
 
-if [ -f "$CLEAN_SCRIPT" ]; then
-    echo "🧹 Invoking dedicated cleanup & maintenance module (clean/clean.sh)..."
-    chmod +x "$CLEAN_SCRIPT"
-    "$CLEAN_SCRIPT"
-else
-    echo "⚠️ Warning: clean/clean.sh not found. Skipping OS debloat and maintenance setup."
+if [ -f "$CLEAN_DIR/debloat.sh" ]; then
+    echo "🧹 Invoking system debloat module (clean/debloat.sh)..."
+    chmod +x "$CLEAN_DIR/debloat.sh"
+    "$CLEAN_DIR/debloat.sh"
+fi
+
+if [ -f "$CLEAN_DIR/routine.sh" ]; then
+    echo "🕒 Invoking routine maintenance module (clean/routine.sh)..."
+    chmod +x "$CLEAN_DIR/routine.sh"
+    "$CLEAN_DIR/routine.sh"
 fi
 
 # 14. Deploy CI/CD Post-Deployment Health Check Utility
