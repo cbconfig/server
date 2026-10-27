@@ -279,16 +279,26 @@ EOF
 cp /etc/systemd/system/ssh.service.d/override.conf /etc/systemd/system/sshd.service.d/override.conf 2>/dev/null || true
 systemctl daemon-reload || true
 
-# Tight SSH Hardening: Disable X11 Forwarding, limit retries, and block agent forwarding
+# SSH Hardening: Disable X11 Forwarding and block agent forwarding
 sed -i 's/#X11Forwarding yes/X11Forwarding no/' /etc/ssh/sshd_config
 sed -i 's/X11Forwarding yes/X11Forwarding no/' /etc/ssh/sshd_config
 
-if ! grep -q "^MaxAuthTries" /etc/ssh/sshd_config; then
-    echo "MaxAuthTries 2" >> /etc/ssh/sshd_config
-fi
+sed -i '/^MaxAuthTries/d' /etc/ssh/sshd_config
+echo "MaxAuthTries 6" >> /etc/ssh/sshd_config
+
 if ! grep -q "^AllowAgentForwarding" /etc/ssh/sshd_config; then
     echo "AllowAgentForwarding no" >> /etc/ssh/sshd_config
 fi
+
+# Ensure high-concurrency SSH sessions for CI/CD runners don't drop connections
+sed -i '/^MaxStartups/d' /etc/ssh/sshd_config
+echo "MaxStartups 20:30:100" >> /etc/ssh/sshd_config
+
+# Keep connections alive and prevent silent idle drops during builds/transfers
+sed -i '/^ClientAliveInterval/d' /etc/ssh/sshd_config
+sed -i '/^ClientAliveCountMax/d' /etc/ssh/sshd_config
+echo "ClientAliveInterval 30" >> /etc/ssh/sshd_config
+echo "ClientAliveCountMax 5" >> /etc/ssh/sshd_config
 
 # Restrict SSH entry exclusively to authorized users
 ALLOWED_USERS="$USER_NAME"
@@ -398,10 +408,10 @@ ln -sfn "$PROJECT_DIR" "/opt/projects" || true
 echo "✅ Project workspace created at '$PROJECT_DIR' (with /opt/project and backward-compatible 'projects' aliases)."
 
 # 9. Configure Firewall (UFW) & Secure Docker Port Exposure
-# We allow SSH first to prevent accidental lockout, then set default 'deny' for all other traffic.
-echo "🛡️ Configuring Firewall (with SSH rate-limiting)..."
-ufw limit ssh/tcp || true
-ufw limit $SSH_PORT/tcp
+# Allow SSH cleanly to prevent accidental lockout, then set default 'deny' for all other traffic.
+echo "🛡️ Configuring Firewall..."
+ufw allow ssh/tcp || true
+ufw allow $SSH_PORT/tcp || true
 
 ufw default deny incoming
 ufw default allow outgoing
@@ -558,13 +568,17 @@ if [ "$ENABLE_SECURITY_EXTRAS" = true ]; then
     echo "🛡️ Setting up Fail2Ban & Automated Security Updates..."
     DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confold" fail2ban unattended-upgrades
     
-    # Configure Fail2Ban to monitor SSH and ban aggressive IPs for 1 hour.
+    # Configure Fail2Ban to monitor SSH with realistic CI/CD retry thresholds and local whitelists.
     cat <<EOF > /etc/fail2ban/jail.local
+[DEFAULT]
+ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+findtime = 10m
+bantime = 1h
+
 [sshd]
 enabled = true
 port = $SSH_PORT
-maxretry = 3
-bantime = 1h
+maxretry = 10
 EOF
     systemctl restart fail2ban
     
